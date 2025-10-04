@@ -1,58 +1,68 @@
-import { useState } from "react"
-import { supabase } from "../supabaseClient"
-import { useNavigate } from "react-router-dom"
+import { useState } from "react";
+import { supabase } from "../supabaseClient";
+import { useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
 
 export default function AuthPage() {
-    const [email, setEmail] = useState("")
-    const [password, setPassword] = useState("")
-    const [loading, setLoading] = useState(false)
-    const [message, setMessage] = useState(null) // { type: "error" | "success", text: string }
-    const navigate = useNavigate()
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [message, setMessage] = useState(null); // { type: "error" | "success", text: string }
+    const navigate = useNavigate();
 
     const showMessage = (type, text) => {
-        setMessage({ type, text })
-        setTimeout(() => setMessage(null), 5000)
-    }
+        setMessage({ type, text });
+        setTimeout(() => setMessage(null), 5000);
+    };
 
     const handleSignUp = async () => {
-        setLoading(true)
-        const { data, error } = await supabase.auth.signUp({ email, password })
-        setLoading(false)
-        if (error) {
-            console.error("Sign-up error:", error, error.code, error.status) // Log full details
-            showMessage("error", error.message)
-        } else {
-            console.log("Sign-up success:", data)
-            showMessage("success", "Перевірте пошту для підтвердження реєстрації.")
+        setLoading(true);
+        try {
+            const { data, error } = await supabase.auth.signUp({ email, password });
+            if (error) throw new Error(error.message);
+            console.log("Sign-up success:", data);
+            showMessage("success", "Перевірте пошту для підтвердження реєстрації.");
+        } catch (error) {
+            console.error("Sign-up error:", error);
+            showMessage("error", error.message);
+        } finally {
+            setLoading(false);
         }
-    }
+    };
 
     const handleSignIn = async () => {
-        setLoading(true)
-        const { data: { user }, error } = await supabase.auth.signInWithPassword({ email, password })
-        if (error) {
-            setLoading(false)
-            showMessage("error", error.message)
-            return
+        setLoading(true);
+        try {
+            const { data: { user }, error } = await supabase.auth.signInWithPassword({ email, password });
+            if (error) throw new Error(error.message);
+            if (!user) throw new Error("Користувач не знайдений");
+
+            // Використовуємо функцію get_user_role
+            const { data: role, error: roleError } = await supabase.rpc('get_user_role');
+            if (roleError) throw new Error("Помилка отримання ролі: " + roleError.message);
+            if (!role) {
+                // Якщо роль не знайдена, додаємо користувача до таблиці users
+                const { error: insertError } = await supabase
+                    .from('users')
+                    .insert({ id: user.id, email: user.email, role: 'viewer' });
+                if (insertError) throw new Error("Помилка додавання користувача: " + insertError.message);
+                navigate('/members');
+                return;
+            }
+
+            if (role === 'superadmin') {
+                navigate('/admin');
+            } else {
+                navigate('/members');
+            }
+        } catch (error) {
+            console.error("Помилка входу:", error);
+            showMessage("error", error.message);
+            await supabase.auth.signOut();
+        } finally {
+            setLoading(false);
         }
-        // Fetch user role
-        const { data: profile, error: profileError } = await supabase
-            .from('users')
-            .select('role')
-            .eq('id', user.id)
-            .single()
-        setLoading(false)
-        if (profileError) {
-            showMessage("error", "Помилка отримання ролі користувача")
-            console.error(profileError)
-            return
-        }
-        if (profile.role === 'superadmin') {
-            navigate('/admin')
-        } else {
-            navigate('/members')
-        }
-    }
+    };
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
@@ -117,5 +127,5 @@ export default function AuthPage() {
                 </div>
             </div>
         </div>
-    )
+    );
 }

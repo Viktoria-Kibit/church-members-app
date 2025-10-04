@@ -1,43 +1,46 @@
-import { useEffect, useState, useRef } from "react"
-import { supabase } from "../supabaseClient"
-import { useNavigate } from "react-router-dom"
-import FilterPanel from "../components/FilterPanel"
-import DownloadPanel from "../components/DownloadPanel"
+import { useEffect, useState, useRef } from "react";
+import { supabase } from "../supabaseClient";
+import { useNavigate } from "react-router-dom";
+import { useDebounce } from "use-debounce";
+import FilterPanel from "../components/FilterPanel";
+import DownloadPanel from "../components/DownloadPanel";
 
 export default function MembersPage() {
-    const [user, setUser] = useState(null)
-    const [role, setRole] = useState(null)
-    const [members, setMembers] = useState([])
-    const [loading, setLoading] = useState(true)
-    const [showDeleteModal, setShowDeleteModal] = useState(false)
-    const [memberToDelete, setMemberToDelete] = useState(null)
-    const navigate = useNavigate()
-    const [filters, setFilters] = useState({})
-    const [showFilters, setShowFilters] = useState(false)
-    const [showDownload, setShowDownload] = useState(false)
-    const filterTimeoutRef = useRef(null)
-    const downloadTimeoutRef = useRef(null)
+    const [user, setUser] = useState(null);
+    const [role, setRole] = useState(null);
+    const [members, setMembers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [memberToDelete, setMemberToDelete] = useState(null);
+    const navigate = useNavigate();
+    const [filters, setFilters] = useState({});
+    const [showFilters, setShowFilters] = useState(false);
+    const [showDownload, setShowDownload] = useState(false);
+    const filterTimeoutRef = useRef(null);
+    const downloadTimeoutRef = useRef(null);
+
+    const [debouncedFilters] = useDebounce(filters, 500);
 
     useEffect(() => {
         const fetchData = async () => {
-            const { data: { user }, error: userError } = await supabase.auth.getUser()
+            const { data: { user }, error: userError } = await supabase.auth.getUser();
             if (userError || !user) {
-                navigate("/auth")
-                return
+                navigate("/auth");
+                return;
             }
-            setUser(user)
+            setUser(user);
 
             const { data: profile, error: profileError } = await supabase
                 .from('users')
                 .select('role')
                 .eq('id', user.id)
-                .single()
+                .single();
             if (profileError) {
-                console.error("Error fetching role:", profileError)
-                navigate("/auth")
-                return
+                console.error("Error fetching role:", profileError);
+                navigate("/auth");
+                return;
             }
-            setRole(profile.role)
+            setRole(profile.role);
 
             let query = supabase
                 .from("members")
@@ -58,39 +61,39 @@ export default function MembersPage() {
                     home_groups(name),
                     deacons(full_name)
                 `)
-                .order("last_name", { ascending: true })
+                .order("last_name", { ascending: true });
 
-            if (filters.street) query = query.ilike("street", `%${filters.street}%`)
-            if (filters.birth_from) query = query.gte("birth_date", `${filters.birth_from}-01-01`)
-            if (filters.birth_to) query = query.lte("birth_date", `${filters.birth_to}-12-31`)
-            if (filters.baptism_from) query = query.gte("baptism_date", `${filters.baptism_from}-01-01`)
-            if (filters.baptism_to) query = query.lte("baptism_date", `${filters.baptism_to}-12-31`)
-            if (filters.status_id) query = query.eq("status_id", filters.status_id)
-            if (filters.ministry_type_id) query = query.eq("ministry_type_id", filters.ministry_type_id)
-            if (filters.home_group_id) query = query.eq("home_group_id", filters.home_group_id)
-            if (filters.deacon_id) query = query.eq("deacon_id", filters.deacon_id)
+            if (debouncedFilters.street) query = query.ilike("street", `%${debouncedFilters.street}%`);
+            if (debouncedFilters.birth_from) query = query.gte("birth_date", `${debouncedFilters.birth_from}-01-01`);
+            if (debouncedFilters.birth_to) query = query.lte("birth_date", `${debouncedFilters.birth_to}-12-31`);
+            if (debouncedFilters.baptism_from) query = query.gte("baptism_date", `${debouncedFilters.baptism_from}-01-01`);
+            if (debouncedFilters.baptism_to) query = query.lte("baptism_date", `${debouncedFilters.baptism_to}-12-31`);
+            if (debouncedFilters.status_id) query = query.eq("status_id", debouncedFilters.status_id);
+            if (debouncedFilters.ministry_type_id) query = query.eq("ministry_type_id", debouncedFilters.ministry_type_id);
+            if (debouncedFilters.home_group_id) query = query.eq("home_group_id", debouncedFilters.home_group_id);
+            if (debouncedFilters.deacon_id) query = query.eq("deacon_id", debouncedFilters.deacon_id);
 
-            const { data, error } = await query
+            const { data, error } = await query;
             if (error) {
-                console.error("Помилка при завантаженні членів:", error.message)
+                console.error("Помилка при завантаженні членів:", error.message);
             } else {
-                setMembers(data)
+                setMembers(data);
             }
-            setLoading(false)
-        }
-        fetchData()
-    }, [navigate, filters])
+            setLoading(false);
+        };
+        fetchData();
+    }, [navigate, debouncedFilters]);
 
     const handleLogout = async () => {
-        await supabase.auth.signOut()
-        navigate("/auth")
-    }
+        await supabase.auth.signOut();
+        navigate("/auth");
+    };
 
     const handleAddMember = async (newMember) => {
-        const { error } = await supabase.from('members').insert(newMember)
+        const { error } = await supabase.from('members').insert(newMember);
         if (error) {
-            console.error("Error adding member:", error)
-            return false
+            console.error("Error adding member:", error);
+            return false;
         }
         const { data } = await supabase.from('members').select(`
             id,
@@ -108,16 +111,16 @@ export default function MembersPage() {
             ministry_types(name),
             home_groups(name),
             deacons(full_name)
-        `).order('last_name', { ascending: true })
-        setMembers(data)
-        return true
-    }
+        `).order('last_name', { ascending: true });
+        setMembers(data);
+        return true;
+    };
 
     const handleEditMember = async (id, updatedData) => {
-        const { error } = await supabase.from('members').update(updatedData).eq('id', id)
+        const { error } = await supabase.from('members').update(updatedData).eq('id', id);
         if (error) {
-            console.error("Error updating member:", error)
-            return false
+            console.error("Error updating member:", error);
+            return false;
         }
         const { data } = await supabase.from('members').select(`
             id,
@@ -135,75 +138,80 @@ export default function MembersPage() {
             ministry_types(name),
             home_groups(name),
             deacons(full_name)
-        `).order('last_name', { ascending: true })
-        setMembers(data)
-        return true
-    }
+        `).order('last_name', { ascending: true });
+        setMembers(data);
+        return true;
+    };
 
     const handleDeleteMember = async (id) => {
-        setMemberToDelete(id)
-        setShowDeleteModal(true)
-    }
+        setMemberToDelete(id);
+        setShowDeleteModal(true);
+    };
 
     const confirmDelete = async () => {
-        const { error } = await supabase.from('members').delete().eq('id', memberToDelete)
+        const { error } = await supabase.from('members').delete().eq('id', memberToDelete);
         if (error) {
-            console.error("Error deleting member:", error)
-            setShowDeleteModal(false)
-            setMemberToDelete(null)
-            return false
+            console.error("Error deleting member:", error);
+            setShowDeleteModal(false);
+            setMemberToDelete(null);
+            return false;
         }
-        setMembers(members.filter(member => member.id !== memberToDelete))
-        setShowDeleteModal(false)
-        setMemberToDelete(null)
-        return true
-    }
+        setMembers(members.filter(member => member.id !== memberToDelete));
+        setShowDeleteModal(false);
+        setMemberToDelete(null);
+        return true;
+    };
 
     const cancelDelete = () => {
-        setShowDeleteModal(false)
-        setMemberToDelete(null)
-    }
+        setShowDeleteModal(false);
+        setMemberToDelete(null);
+    };
 
     const handleFilterMouseEnter = () => {
-        clearTimeout(filterTimeoutRef.current)
-        setShowFilters(true)
-        setShowDownload(false)
-        clearTimeout(downloadTimeoutRef.current)
-    }
+        clearTimeout(filterTimeoutRef.current);
+        setShowFilters(true);
+        setShowDownload(false);
+        clearTimeout(downloadTimeoutRef.current);
+    };
 
     const handleFilterMouseLeave = () => {
         filterTimeoutRef.current = setTimeout(() => {
-            setShowFilters(false)
-        }, 2000)
-    }
+            setShowFilters(false);
+        }, 2000);
+    };
 
     const handleDownloadMouseEnter = () => {
-        clearTimeout(downloadTimeoutRef.current)
-        setShowDownload(true)
-        setShowFilters(false)
-        clearTimeout(filterTimeoutRef.current)
-    }
+        clearTimeout(downloadTimeoutRef.current);
+        setShowDownload(true);
+        setShowFilters(false);
+        clearTimeout(filterTimeoutRef.current);
+    };
 
     const handleDownloadMouseLeave = () => {
         downloadTimeoutRef.current = setTimeout(() => {
-            setShowDownload(false)
-        }, 2000)
-    }
+            setShowDownload(false);
+        }, 2000);
+    };
+
+    const keepDownloadPanelOpen = () => {
+        clearTimeout(downloadTimeoutRef.current);
+        setShowDownload(true);
+    };
 
     const handleFilterClick = () => {
-        setShowFilters(p => !p)
-        setShowDownload(false)
-        clearTimeout(downloadTimeoutRef.current)
-    }
+        setShowFilters(p => !p);
+        setShowDownload(false);
+        clearTimeout(downloadTimeoutRef.current);
+    };
 
     const handleDownloadClick = () => {
-        setShowDownload(p => !p)
-        setShowFilters(false)
-        clearTimeout(filterTimeoutRef.current)
-    }
+        setShowDownload(p => !p);
+        setShowFilters(false);
+        clearTimeout(filterTimeoutRef.current);
+    };
 
     if (loading) {
-        return <div className="p-6">Завантаження...</div>
+        return <div className="p-6">Завантаження...</div>;
     }
 
     return (
@@ -249,7 +257,7 @@ export default function MembersPage() {
                                 onMouseEnter={handleDownloadMouseEnter}
                                 onMouseLeave={handleDownloadMouseLeave}
                             >
-                                <DownloadPanel members={members} />
+                                <DownloadPanel members={members} keepPanelOpen={keepDownloadPanelOpen} />
                             </div>
                         )}
                     </div>
@@ -258,7 +266,7 @@ export default function MembersPage() {
                             onClick={() => navigate('/add-member')}
                             className="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600"
                         >
-                            Додати члена
+                            Додати
                         </button>
                     )}
                     {role === 'superadmin' && (
@@ -363,7 +371,7 @@ export default function MembersPage() {
                 </div>
             )}
         </div>
-    )
+    );
 }
 
 function Th({ children }) {
@@ -371,7 +379,7 @@ function Th({ children }) {
         <th className="text-left px-3 py-2 border-b text-sm font-semibold text-gray-700 whitespace-nowrap">
             {children}
         </th>
-    )
+    );
 }
 
 function Td({ children }) {
@@ -379,5 +387,5 @@ function Td({ children }) {
         <td className="px-3 py-2 border-b text-sm text-gray-800 whitespace-nowrap">
             {children || "-"}
         </td>
-    )
+    );
 }
