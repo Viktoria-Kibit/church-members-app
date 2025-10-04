@@ -15,11 +15,29 @@ export default function AuthPage() {
         setTimeout(() => setMessage(null), 5000);
     };
 
+    const validateInputs = () => {
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            showMessage("error", "Введіть коректну електронну пошту");
+            return false;
+        }
+        if (!password || password.length < 6) {
+            showMessage("error", "Пароль має містити щонайменше 6 символів");
+            return false;
+        }
+        return true;
+    };
+
     const handleSignUp = async () => {
+        if (!validateInputs()) return;
         setLoading(true);
         try {
             const { data, error } = await supabase.auth.signUp({ email, password });
-            if (error) throw new Error(error.message);
+            if (error) {
+                if (error.message.includes("already registered")) {
+                    throw new Error("Цей email уже зареєстровано. Спробуйте увійти.");
+                }
+                throw new Error(error.message);
+            }
             console.log("Sign-up success:", data);
             showMessage("success", "Перевірте пошту для підтвердження реєстрації.");
         } catch (error) {
@@ -31,17 +49,21 @@ export default function AuthPage() {
     };
 
     const handleSignIn = async () => {
+        if (!validateInputs()) return;
         setLoading(true);
         try {
             const { data: { user }, error } = await supabase.auth.signInWithPassword({ email, password });
-            if (error) throw new Error(error.message);
+            if (error) {
+                if (error.message.includes("Invalid login credentials")) {
+                    throw new Error("Неправильний email або пароль");
+                }
+                throw new Error(error.message);
+            }
             if (!user) throw new Error("Користувач не знайдений");
 
-            // Використовуємо функцію get_user_role
             const { data: role, error: roleError } = await supabase.rpc('get_user_role');
             if (roleError) throw new Error("Помилка отримання ролі: " + roleError.message);
             if (!role) {
-                // Якщо роль не знайдена, додаємо користувача до таблиці users
                 const { error: insertError } = await supabase
                     .from('users')
                     .insert({ id: user.id, email: user.email, role: 'viewer' });
@@ -92,6 +114,7 @@ export default function AuthPage() {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="email@example.com"
+                        disabled={loading}
                     />
                 </div>
 
@@ -106,6 +129,7 @@ export default function AuthPage() {
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="Ваш пароль"
+                        disabled={loading}
                     />
                 </div>
 
@@ -113,16 +137,36 @@ export default function AuthPage() {
                     <button
                         onClick={handleSignIn}
                         disabled={loading}
-                        className="w-1/2 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition disabled:opacity-50"
+                        className="w-1/2 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition disabled:opacity-50 relative"
                     >
-                        Увійти
+                        {loading ? (
+                            <span className="flex items-center justify-center">
+                                <svg className="animate-spin h-5 w-5 mr-2 text-white" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8h-8z" />
+                                </svg>
+                                Завантаження...
+                            </span>
+                        ) : (
+                            "Увійти"
+                        )}
                     </button>
                     <button
                         onClick={handleSignUp}
                         disabled={loading}
-                        className="w-1/2 border border-blue-600 text-blue-600 py-2 px-4 rounded-md hover:bg-blue-50 transition disabled:opacity-50"
+                        className="w-1/2 border border-blue-600 text-blue-600 py-2 px-4 rounded-md hover:bg-blue-50 transition disabled:opacity-50 relative"
                     >
-                        Зареєструватись
+                        {loading ? (
+                            <span className="flex items-center justify-center">
+                                <svg className="animate-spin h-5 w-5 mr-2 text-blue-600" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8h-8z" />
+                                </svg>
+                                Завантаження...
+                            </span>
+                        ) : (
+                            "Зареєструватись"
+                        )}
                     </button>
                 </div>
             </div>
