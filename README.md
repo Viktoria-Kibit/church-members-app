@@ -62,7 +62,7 @@ npm start
 ```
 src/
  ├─ components/       # UI-компоненти (таблиці, фільтри, кнопки)
- ├─ pages/            # Сторінки (AuthPage, MembersPage)
+ ├─ pages/            # Сторінки (LoginPage, MembersPage)
  ├─ supabaseClient.js # Налаштування клієнта Supabase
  ├─ App.js            # Головний роутер
 ```
